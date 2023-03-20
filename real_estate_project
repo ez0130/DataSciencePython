@@ -1,0 +1,253 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyOgNziQFNxfbJkG9UzuJ7AQ",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/ez0130/DataSciencePython/blob/master/real_estate_project\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "Cd3vY11VCgJJ"
+      },
+      "outputs": [],
+      "source": [
+        "#!pip install pymysql\n",
+        "#!pip install psycopg2"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from selenium import webdriver\n",
+        "from selenium.webdriver.support.ui import WebDriverWait\n",
+        "import requests\n",
+        "from bs4 import BeautifulSoup\n",
+        "import time\n",
+        "import pandas as pd\n",
+        "import pymysql\n",
+        "import psycopg2\n",
+        "from psycopg2 import Error\n",
+        "from sqlalchemy import create_engine"
+      ],
+      "metadata": {
+        "id": "WGDlArGCCy07"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "'''\n",
+        "try:\n",
+        "    connection = psycopg2.connect(database=\"postgres\",\n",
+        "                        host=\"localhost\",\n",
+        "                        user=\"property\",\n",
+        "                        password=\"property\",\n",
+        "                        port=\"5432\")\n",
+        "\n",
+        "    cursor = connection.cursor()\n",
+        "    # SQL query to create a new table\n",
+        "    create_table_query = '''CREATE TABLE mobile\n",
+        "          (ID INT PRIMARY KEY     NOT NULL,\n",
+        "          MODEL           TEXT    NOT NULL,\n",
+        "          PRICE         REAL); '''\n",
+        "    # Execute a command: this creates a new table\n",
+        "    cursor.execute(create_table_query)\n",
+        "    connection.commit()\n",
+        "    print(\"Table created successfully in PostgreSQL \")\n",
+        "\n",
+        "except (Exception, Error) as error:\n",
+        "    print(\"Error while connecting to PostgreSQL\", error)\n",
+        "finally:\n",
+        "    if connection:\n",
+        "        cursor.close()\n",
+        "        connection.close()\n",
+        "        print(\"PostgreSQL connection is closed\")\n",
+        "'''"
+      ],
+      "metadata": {
+        "id": "HSoI4nzMC2so"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "city_state = \"dallas-tx\"\n",
+        "#city_state = input(\"city-state: ex:austin-tx\")\n",
+        "url0 = 'https://www.zillow.com/' + city_state"
+      ],
+      "metadata": {
+        "id": "YeQLFww3C4Jo"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "p = 1\n",
+        "df = pd.DataFrame()\n",
+        "price_list = []\n",
+        "bd_list = []\n",
+        "bt_list = []\n",
+        "sqft_list = []\n",
+        "\n",
+        "while p < 3 :\n",
+        "    \n",
+        "    page = '/'+ str(p) + '_p'\n",
+        "    p += 1\n",
+        "    url = 'https://www.zillow.com/' + city_state + page\n",
+        "    driver = webdriver.Chrome('chromedriver.exe')\n",
+        "    driver.get(url)\n",
+        "    SCROLL_PAUSE_TIME = 2\n",
+        "    last_height = driver.execute_script(\"return document.body.scrollHeight\")\n",
+        "    while True:\n",
+        "        driver.execute_script(\"window.scrollTo(0, document.body.scrollHeight);\")\n",
+        "        time.sleep(SCROLL_PAUSE_TIME)\n",
+        "        new_height = driver.execute_script(\"return document.body.scrollHeight\")\n",
+        "        if new_height == last_height:\n",
+        "            break\n",
+        "        last_height = new_height\n",
+        "    time.sleep(10)\n",
+        "    # Scrape the data\n",
+        "    html = driver.page_source\n",
+        "    x=0\n",
+        "    while x != -1:\n",
+        "      x = html.find(\"property-card-price\")\n",
+        "      if x == -1:\n",
+        "        break\n",
+        "      price = int(''.join((((html[x+22:x+33]).split('<'))[0]).split(',')))\n",
+        "      html = html[x:]\n",
+        "      y = html.find(\"<abbr>bds</abbr>\")\n",
+        "      bd = html[y-7:y-5]\n",
+        "      if bd[0] == \">\":\n",
+        "        bd = int(bd[1:])\n",
+        "      html = html[y:]\n",
+        "      z = html.find(\"<abbr>ba</abbr>\")\n",
+        "      bt = html[z-7:z-5]\n",
+        "      if bt[0] == \">\":\n",
+        "        bt = int(bt[1:])\n",
+        "      html = html[z:]\n",
+        "      w = html.find(\"<abbr>sqft</abbr>\")\n",
+        "      if ((html[w-10:w-5]).find('>')) == -1:\n",
+        "          sqft = int(''.join((html[w-10:w-5]).split(',')))\n",
+        "      else:\n",
+        "         sqft = int(''.join(((html[w-10:w-5].split('>'))[1]).split(',')))\n",
+        "        \n",
+        "      html = html[w:]\n",
+        "      price_list.append(price)\n",
+        "      bd_list.append(bd)\n",
+        "      bt_list.append(bt)\n",
+        "      sqft_list.append(sqft)\n",
+        " \n",
+        "# Close the webdriver\n",
+        "    driver.quit()\n",
+        "data = {\"price\": price_list, \"bd\": bd_list, \"bt\": bt_list, \"sqft\": sqft_list}\n",
+        "df = pd.DataFrame(data)\n",
+        "df['price'] = df['price'].astype('int')\n",
+        "df['bd'] = df['bd'].astype('int')\n",
+        "df['bt'] = df['bt'].astype('int')\n",
+        "df['sqft'] = df['sqft'].astype('int')\n",
+        "print(df)"
+      ],
+      "metadata": {
+        "id": "9JiwzufFC5Tm"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "data = {\"price\": price_list, \"bd\": bd_list, \"bt\": bt_list, \"sqft\": sqft_list}\n",
+        "df = pd.DataFrame(data)\n",
+        "df['price'] = df['price'].astype('int')\n",
+        "df['bd'] = df['bd'].astype('int')\n",
+        "df['bt'] = df['bt'].astype('int')\n",
+        "df['sqft'] = df['sqft'].astype('int')\n",
+        "print(df)\n",
+        "print(type(df))"
+      ],
+      "metadata": {
+        "id": "K6UCy7RnC5dW"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "try:\n",
+        "    connection = psycopg2.connect(database=\"postgres\",\n",
+        "                                  host=\"localhost\",\n",
+        "                                  user=\"property\",\n",
+        "                                  password=\"property\",\n",
+        "                                  port=\"5432\")\n",
+        "    cursor = connection.cursor()    \n",
+        "    for index, row in df.iterrows():\n",
+        "        insert_query = '''INSERT INTO property (price, bd, bt, sqft)\n",
+        "                          VALUES ({}, {}, {}, {})'''.format(row['price'], row['bd'], row['bt'], row['sqft'])\n",
+        "        cursor.execute(insert_query)\n",
+        "    connection.commit()\n",
+        "    print(\"Data inserted successfully in PostgreSQL \")\n",
+        "\n",
+        "except (Exception, Error) as error:\n",
+        "    print(\"Error while connecting to PostgreSQL\", error)\n",
+        "finally:\n",
+        "    if connection:\n",
+        "        cursor.close()\n",
+        "        connection.close()\n",
+        "        print(\"PostgreSQL connection is closed\")"
+      ],
+      "metadata": {
+        "id": "iYNNQYG3C8VO"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Analyzing Data"
+      ],
+      "metadata": {
+        "id": "419JlgFQC984"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "bVjcusy3C-fr"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
